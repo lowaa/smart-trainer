@@ -617,6 +617,54 @@ var AllWorkouts = []Workout{
 		},
 	},
 	{
+		Name: "Intervals 30m",
+		Blocks: []WorkoutBlock{
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute}, // Warmup
+			// Interval 1
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 5 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 2
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 3
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 4
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+		},
+	},
+	{
+		Name: "Intervals 60m",
+		Blocks: []WorkoutBlock{
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute}, // Warmup
+			// Interval 1
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 5 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 2
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 3
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 4
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 5
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 6
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 7
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 8
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+		},
+	},
+	{
 		Name: "HR Zone 2 - 30 Min",
 		Blocks: []WorkoutBlock{
 			{
