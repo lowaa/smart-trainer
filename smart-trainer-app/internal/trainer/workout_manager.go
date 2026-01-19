@@ -17,15 +17,13 @@ const (
 	cmdStop
 )
 
-// PID controller gains tuned for slow HR convergence (~60 seconds)
-// HR responds slowly to power changes, so we use conservative gains
 const (
-	hrPidKp          = 1.0  // Proportional gain: watts per bpm error
-	hrPidKi          = 0.05 // Integral gain: accumulates slowly for steady-state correction
-	hrPidKd          = 0.0  // Derivative gain: disabled (HR signal is noisy)
-	hrPidOutputMin   = 50   // Minimum power output (watts)
-	hrPidIntegralMax = 100  // Anti-windup: max integral accumulation
-	hrPidMaxFTPMult  = 1.0  // Maximum power as multiplier of FTP (HR will eventually rise)
+	hrPidKp          = 2.5
+	hrPidKi          = 0.15
+	hrPidKd          = 0.5
+	hrPidOutputMin   = 50
+	hrPidIntegralMax = 150
+	hrPidMaxFTPMult  = 1.0
 )
 
 // hrPIDState holds the state for the heart rate PID controller
@@ -103,8 +101,8 @@ type WorkoutManager struct {
 	maxHR       int16 // Maximum heart rate in bpm
 
 	// PID controller state for HR mode (protected by mu)
-	hrPID            hrPIDState
-	lastBlockIdx     int // Track block changes to reset PID
+	hrPID        hrPIDState
+	lastBlockIdx int // Track block changes to reset PID
 
 	// Goroutine management
 	cmdChan      chan workoutCommand
@@ -132,15 +130,15 @@ func NewWorkoutManager(model *UIModel, deviceHandler *DeviceHandler, logger *log
 	}
 
 	wm := &WorkoutManager{
-		model:        model,
+		model:         model,
 		deviceHandler: deviceHandler,
-		logger:       logger,
-		status:       WorkoutStatusIdle,
-		ftp:          DefaultFTP,
-		maxHR:        DefaultMaxHR,
-		lastBlockIdx: -1,
-		cmdChan:      make(chan workoutCommand, 1),
-		doneChan:     make(chan struct{}),
+		logger:        logger,
+		status:        WorkoutStatusIdle,
+		ftp:           DefaultFTP,
+		maxHR:         DefaultMaxHR,
+		lastBlockIdx:  -1,
+		cmdChan:       make(chan workoutCommand, 1),
+		doneChan:      make(chan struct{}),
 	}
 
 	// Start the workout execution goroutine
@@ -390,14 +388,14 @@ func (wm *WorkoutManager) sendTargetPower(watts int16) {
 
 // tickResult holds the result of processing a timer tick
 type tickResult struct {
-	state       WorkoutState
-	skip        bool           // status wasn't running, skip this tick
-	completed   bool           // workout just completed
-	block       *WorkoutBlock  // current block (nil if none)
-	blockIdx    int            // current block index
-	ftp         int16          // FTP value
-	maxHR       int16          // Max HR value
-	pidOutput   float64        // PID output power (for HR mode)
+	state        WorkoutState
+	skip         bool          // status wasn't running, skip this tick
+	completed    bool          // workout just completed
+	block        *WorkoutBlock // current block (nil if none)
+	blockIdx     int           // current block index
+	ftp          int16         // FTP value
+	maxHR        int16         // Max HR value
+	pidOutput    float64       // PID output power (for HR mode)
 	blockChanged bool          // true if we moved to a new block
 }
 
