@@ -549,6 +549,8 @@ func (w *Workout) TotalDuration() time.Duration {
 	return total
 }
 
+const HEART_RATE_ZONE_2_MAX_HR_RATIO = 0.67
+
 // AllWorkouts defines the available workouts
 var AllWorkouts = []Workout{
 	{
@@ -617,7 +619,7 @@ var AllWorkouts = []Workout{
 		},
 	},
 	{
-		Name: "Intervals 30m",
+		Name: "Intervals - 30m",
 		Blocks: []WorkoutBlock{
 			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute}, // Warmup
 			// Interval 1
@@ -635,7 +637,7 @@ var AllWorkouts = []Workout{
 		},
 	},
 	{
-		Name: "Intervals 60m",
+		Name: "Intervals - 60m",
 		Blocks: []WorkoutBlock{
 			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute}, // Warmup
 			// Interval 1
@@ -665,11 +667,37 @@ var AllWorkouts = []Workout{
 		},
 	},
 	{
+		Name: "Intervals - 30m, HR Zone 2 - 60m",
+		Blocks: []WorkoutBlock{
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute}, // Warmup
+			// Interval 1
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 5 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 2
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 3
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			// Interval 4
+			{StartFTPMult: 0.9, EndFTPMult: 0.9, TargetCadence: 90, Duration: 4 * time.Minute},
+			{StartFTPMult: 0.65, EndFTPMult: 0.65, TargetCadence: 90, Duration: 3 * time.Minute},
+			{
+				TargetMode:      BlockTargetModeHeartRate,
+				TargetMaxHRMult: HEART_RATE_ZONE_2_MAX_HR_RATIO,
+				StartFTPMult:    NotSet,
+				EndFTPMult:      NotSet,
+				TargetCadence:   90,
+				Duration:        30 * time.Minute,
+			},
+		},
+	},
+	{
 		Name: "HR Zone 2 - 30 Min",
 		Blocks: []WorkoutBlock{
 			{
 				TargetMode:      BlockTargetModeHeartRate,
-				TargetMaxHRMult: 0.65,
+				TargetMaxHRMult: HEART_RATE_ZONE_2_MAX_HR_RATIO,
 				StartFTPMult:    NotSet,
 				EndFTPMult:      NotSet,
 				TargetCadence:   90,
@@ -682,7 +710,7 @@ var AllWorkouts = []Workout{
 		Blocks: []WorkoutBlock{
 			{
 				TargetMode:      BlockTargetModeHeartRate,
-				TargetMaxHRMult: 0.65,
+				TargetMaxHRMult: HEART_RATE_ZONE_2_MAX_HR_RATIO,
 				StartFTPMult:    NotSet,
 				EndFTPMult:      NotSet,
 				TargetCadence:   90,
