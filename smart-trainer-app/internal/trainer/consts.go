@@ -688,7 +688,7 @@ var AllWorkouts = []Workout{
 				StartFTPMult:    NotSet,
 				EndFTPMult:      NotSet,
 				TargetCadence:   90,
-				Duration:        30 * time.Minute,
+				Duration:        60 * time.Minute,
 			},
 		},
 	},
