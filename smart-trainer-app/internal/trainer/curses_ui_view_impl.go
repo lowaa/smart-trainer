@@ -101,7 +101,7 @@ func (ui *CursesUIViewImpl) initDeviceManagementMode(controller *UIController) {
 	instructionsText := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter)
-	instructionsText.SetText("[yellow]S[white] Toggle Scan  |  [yellow]Tab[white] Cycle Devices  |  [yellow]Enter[white] Connect  |  [yellow]D[white] Disconnect\n[yellow]1[white] Devices  |  [yellow]2[white] Dashboard  |  [yellow]3[white] Workouts")
+	instructionsText.SetText("[yellow]S[white] Toggle Scan  |  [yellow]Tab[white] Cycle Devices  |  [yellow]Enter[white] Connect  |  [yellow]D[white] Disconnect\n[yellow]1[white] Devices  |  [yellow]2[white] Workouts  |  [yellow]3[white] Dashboard")
 
 	// Create a horizontal flex to hold each device type's column
 	deviceTypesRowFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
@@ -652,7 +652,7 @@ func (ui *CursesUIViewImpl) updateWorkoutDisplay(state WorkoutState) {
 	switch state.Status {
 	case WorkoutStatusIdle:
 		text = "\n  [gray]No workout loaded[white]\n\n"
-		text += "  Go to Workout Selection (press 3) to load a workout.\n"
+		text += "  Go to Workout Selection (press 2) to load a workout.\n"
 
 	case WorkoutStatusReady:
 		if state.Workout != nil {

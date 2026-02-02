@@ -52,8 +52,8 @@ type UIModeInfo struct {
 // AllUIModes defines all available UI modes in order
 var AllUIModes = []UIModeInfo{
 	{Mode: UIModeDeviceManagement, DisplayName: "Device Management", KeyBinding: '1'},
-	{Mode: UIModeTrainerDashboard, DisplayName: "Trainer Dashboard", KeyBinding: '2'},
-	{Mode: UIModeWorkoutSelection, DisplayName: "Workout Selection", KeyBinding: '3'},
+	{Mode: UIModeWorkoutSelection, DisplayName: "Workout Selection", KeyBinding: '2'},
+	{Mode: UIModeTrainerDashboard, DisplayName: "Trainer Dashboard", KeyBinding: '3'},
 }
 
 // GetUIModeByKey returns the mode for a given key binding

@@ -137,7 +137,7 @@ func (c *UIController) ToggleWorkout() {
 	case WorkoutStatusRunning:
 		c.workoutManager.Pause()
 	default:
-		c.logger.Printf("No workout loaded - select one in Workout Selection mode (press 3)")
+		c.logger.Printf("No workout loaded - select one in Workout Selection mode (press 2)")
 	}
 }
 
