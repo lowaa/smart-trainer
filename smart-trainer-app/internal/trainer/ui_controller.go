@@ -1,7 +1,11 @@
 package trainer
 
 import (
+	"context"
 	"log"
+	"sync"
+
+	"github.com/lowaak/smart-trainer/smart-trainer-app/internal/go_func_utils"
 )
 
 // UIController handles UI events and coordinates with the UIModel
@@ -10,6 +14,9 @@ type UIController struct {
 	deviceHandler  *DeviceHandler
 	workoutManager *WorkoutManager
 	logger         *log.Logger
+	ctx            context.Context
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
 }
 
 // NewUIController creates a new UIController with the given dependencies
@@ -27,11 +34,40 @@ func NewUIController(model *UIModel, deviceHandler *DeviceHandler, workoutManage
 		panic("UIController: logger cannot be nil")
 	}
 
-	return &UIController{
+	ctx, cancel := context.WithCancel(context.Background())
+	c := &UIController{
 		model:          model,
 		deviceHandler:  deviceHandler,
 		workoutManager: workoutManager,
 		logger:         logger,
+		ctx:            ctx,
+		cancel:         cancel,
+	}
+
+	c.wg.Add(1)
+	go_func_utils.SafeGo(logger, func() { c.listenToAutoConnect() })
+
+	return c
+}
+
+func (c *UIController) listenToAutoConnect() {
+	defer c.wg.Done()
+
+	ch := make(chan AutoConnectRequest, 1)
+	unregister := c.model.ListenToAutoConnect(ch)
+	defer unregister()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case req, ok := <-ch:
+			if !ok {
+				return
+			}
+			c.logger.Printf("Auto-connecting %s (%s) from persistence", req.Device.Address, req.DeviceTypeID)
+			c.ScanDeviceSelected(req.DeviceTypeID, req.Device)
+		}
 	}
 }
 
@@ -195,6 +231,8 @@ func (c *UIController) setTargetPower(watts int16) {
 
 // Shutdown stops the workout manager, device handler and cleans up resources
 func (c *UIController) Shutdown() {
+	c.cancel()
+	c.wg.Wait()
 	c.workoutManager.Shutdown()
 	c.deviceHandler.Shutdown()
 }
