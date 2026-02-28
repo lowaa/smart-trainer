@@ -406,7 +406,7 @@ func (ui *CursesUIViewImpl) SetupKeyboardHandlers(controller *UIController) {
 		case UIModeDeviceManagement:
 			// 's' key to toggle scanning (only in device management mode)
 			if event.Key() == tcell.KeyRune && event.Rune() == 's' {
-				controller.OnSKey()
+				controller.ToggleDeviceScan()
 				return nil
 			}
 			// 'd' key to disconnect the device for the focused device type

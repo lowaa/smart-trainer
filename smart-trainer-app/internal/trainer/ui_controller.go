@@ -114,16 +114,30 @@ func (c *UIController) OnEscapeKey() {
 	c.model.RequestCloseApplication()
 }
 
-// OnSKey handles when the 's' key is pressed - toggles scanning
-func (c *UIController) OnSKey() {
+func (c *UIController) StartDeviceScan() {
 	if c.deviceHandler.IsScanning() {
-		err := c.deviceHandler.StopScan()
-		if err != nil {
-			c.logger.Printf("error stopping scan: %v", err)
-			return
-		}
+		c.logger.Printf("already scanning")
+		return
+	}
+	c.deviceHandler.StartScan()
+}
+
+func (c *UIController) StopDeviceScan() {
+	if !c.deviceHandler.IsScanning() {
+		c.logger.Printf("already not scanning")
+		return
+	}
+	err := c.deviceHandler.StopScan()
+	if err != nil {
+		c.logger.Printf("error stopping scan: %v", err)
+	}
+}
+
+func (c *UIController) ToggleDeviceScan() {
+	if c.deviceHandler.IsScanning() {
+		c.StopDeviceScan()
 	} else {
-		c.deviceHandler.StartScan()
+		c.StartDeviceScan()
 	}
 }
 
@@ -131,6 +145,12 @@ func (c *UIController) OnSKey() {
 func (c *UIController) OnModeChange(mode UIMode) {
 	if info, ok := GetUIModeInfo(mode); ok {
 		c.logger.Printf("Switching to %s mode", info.DisplayName)
+	}
+	// We want to scan whenever we are in device mgmt mode
+	if mode == UIModeDeviceManagement {
+		c.StartDeviceScan()
+	} else {
+		c.StopDeviceScan()
 	}
 	c.model.SetMode(mode)
 }
