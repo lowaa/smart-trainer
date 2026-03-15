@@ -40,8 +40,9 @@ func NewAutoInitService(model *UIModel, deviceHandler *DeviceHandler, logger *lo
 		cancel:        cancel,
 	}
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go_func_utils.SafeGo(logger, func() { s.listenToScanDevices() })
+	go_func_utils.SafeGo(logger, func() { s.listenToUIState() })
 
 	return s
 }
@@ -71,6 +72,32 @@ func (s *AutoInitService) listenToScanDevices() {
 				return
 			}
 			s.handleScanUpdate(devices, autoConnectRequested)
+		}
+	}
+}
+
+func (s *AutoInitService) listenToUIState() {
+	defer s.wg.Done()
+
+	ch := make(chan UIState, 1)
+	unregister := s.model.ListenToUIState(ch)
+	defer unregister()
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case state, ok := <-ch:
+			if !ok {
+				return
+			}
+			if state.Mode == UIModeDeviceManagement {
+				s.deviceHandler.StartScan()
+			} else {
+				if err := s.deviceHandler.StopScan(); err != nil {
+					s.logger.Printf("AutoInitService: StopScan error: %v", err)
+				}
+			}
 		}
 	}
 }

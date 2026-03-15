@@ -101,7 +101,7 @@ func (ui *CursesUIViewImpl) initDeviceManagementMode(controller *UIController) {
 	instructionsText := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter)
-	instructionsText.SetText("[yellow]S[white] Toggle Scan  |  [yellow]Tab[white] Cycle Devices  |  [yellow]Enter[white] Connect  |  [yellow]D[white] Disconnect\n[yellow]1[white] Devices  |  [yellow]2[white] Workouts  |  [yellow]3[white] Dashboard")
+	instructionsText.SetText("[yellow]Tab[white] Cycle Devices  |  [yellow]Enter[white] Connect  |  [yellow]D[white] Disconnect\n[yellow]1[white] Devices  |  [yellow]2[white] Workouts  |  [yellow]3[white] Dashboard")
 
 	// Create a horizontal flex to hold each device type's column
 	deviceTypesRowFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
@@ -404,11 +404,6 @@ func (ui *CursesUIViewImpl) SetupKeyboardHandlers(controller *UIController) {
 		// Mode-specific key handlers
 		switch ui.currentMode {
 		case UIModeDeviceManagement:
-			// 's' key to toggle scanning (only in device management mode)
-			if event.Key() == tcell.KeyRune && event.Rune() == 's' {
-				controller.ToggleDeviceScan()
-				return nil
-			}
 			// 'd' key to disconnect the device for the focused device type
 			if event.Key() == tcell.KeyRune && event.Rune() == 'd' {
 				if deviceTypeID := ui.getFocusedDeviceTypeID(); deviceTypeID != "" {

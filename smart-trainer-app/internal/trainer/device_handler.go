@@ -277,13 +277,20 @@ func (h *DeviceHandler) IsDeviceTypeSubscribed(deviceTypeID DeviceTypeID) bool {
 
 // StartScan starts scanning for BT devices
 func (h *DeviceHandler) StartScan() {
-	serviceUuidFilter := GetUniqueServiceUUIDs()
+	if h.btManager.IsScanning() {
+		h.logger.Printf("DeviceHandler: StartScan called but already scanning, ignoring")
+		return
+	}
 	h.logger.Printf("Starting BLE scan...")
-	h.btManager.StartScan(serviceUuidFilter)
+	h.btManager.StartScan(GetUniqueServiceUUIDs())
 }
 
 // StopScan stops scanning for BT devices
 func (h *DeviceHandler) StopScan() error {
+	if !h.btManager.IsScanning() {
+		h.logger.Printf("DeviceHandler: StopScan called but not scanning, ignoring")
+		return nil
+	}
 	if err := h.btManager.StopScan(); err != nil {
 		h.logger.Printf("DeviceHandler: Error stopping scan: %v", err)
 		return err

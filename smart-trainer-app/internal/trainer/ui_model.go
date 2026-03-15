@@ -99,6 +99,10 @@ func NewUIModel(manager bt.BTManagerInterface, logger *log.Logger, uiLogChan <-c
 	model.wg.Add(1)
 	go_func_utils.SafeGo(model.logger, func() { model.readFromLogChannel(ctx, uiLogChan) })
 
+	// prime the model with a couple of things, these will trigger events
+	// on listen
+	model.uiStateEvent.Notify(model.uiState)
+
 	return model
 }
 
