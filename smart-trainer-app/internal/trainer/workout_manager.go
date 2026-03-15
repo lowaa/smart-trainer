@@ -23,7 +23,8 @@ const (
 	hrPidKd          = 0.5
 	hrPidOutputMin   = 50
 	hrPidIntegralMax = 150
-	hrPidMaxFTPMult  = 1.0
+	// my poor legs
+	hrPidMaxFTPMult  = 0.8
 )
 
 // hrPIDState holds the state for the heart rate PID controller
@@ -93,16 +94,18 @@ type WorkoutManager struct {
 	logger        *log.Logger
 
 	// Current workout state (protected by mu)
-	mu          sync.RWMutex
-	workout     *Workout
-	status      WorkoutStatus
-	elapsedTime time.Duration
-	ftp         int16 // Functional Threshold Power in watts
-	maxHR       int16 // Maximum heart rate in bpm
+	mu      sync.RWMutex
+	workout *Workout
+	status  WorkoutStatus
+	ftp     int16 // Functional Threshold Power in watts
+	maxHR   int16 // Maximum heart rate in bpm
 
 	// PID controller state for HR mode (protected by mu)
 	hrPID        hrPIDState
 	lastBlockIdx int // Track block changes to reset PID
+
+	// Workout data tracking
+	tracker *WorkoutTracker
 
 	// Goroutine management
 	cmdChan      chan workoutCommand
@@ -137,6 +140,7 @@ func NewWorkoutManager(model *UIModel, deviceHandler *DeviceHandler, logger *log
 		ftp:           DefaultFTP,
 		maxHR:         DefaultMaxHR,
 		lastBlockIdx:  -1,
+		tracker:       NewWorkoutTracker(),
 		cmdChan:       make(chan workoutCommand, 1),
 		doneChan:      make(chan struct{}),
 	}
@@ -190,9 +194,10 @@ func (wm *WorkoutManager) SetWorkout(workout *Workout) {
 	}
 
 	wm.workout = workout
-	wm.elapsedTime = 0
 	wm.hrPID.reset()
 	wm.lastBlockIdx = -1
+
+	wm.tracker = NewWorkoutTracker()
 
 	if workout != nil {
 		wm.status = WorkoutStatusReady
@@ -294,8 +299,15 @@ func (wm *WorkoutManager) buildState() WorkoutState {
 		return state
 	}
 
-	state.ElapsedTime = wm.elapsedTime
-	state.RemainingTime = wm.workout.TotalDuration() - wm.elapsedTime
+	elapsed := wm.tracker.GetElapsedTime(nil)
+	totalDuration := wm.workout.TotalDuration()
+	if elapsed > totalDuration {
+		elapsed = totalDuration
+	}
+	state.ElapsedTime = elapsed
+	state.RemainingTime = totalDuration - elapsed
+	state.AvgPowerWatts = wm.tracker.GetWorkoutAvgPower(nil)
+	state.AvgHeartRate = wm.tracker.GetWorkoutAvgHeartRate(nil)
 
 	if len(wm.workout.Blocks) == 0 {
 		return state
@@ -305,10 +317,10 @@ func (wm *WorkoutManager) buildState() WorkoutState {
 	var blockStartTime time.Duration
 	for i, block := range wm.workout.Blocks {
 		blockEndTime := blockStartTime + block.Duration
-		if wm.elapsedTime < blockEndTime {
+		if elapsed < blockEndTime {
 			state.CurrentBlockIdx = i
-			state.BlockElapsedTime = wm.elapsedTime - blockStartTime
-			state.BlockRemainingTime = blockEndTime - wm.elapsedTime
+			state.BlockElapsedTime = elapsed - blockStartTime
+			state.BlockRemainingTime = blockEndTime - elapsed
 
 			// Calculate targets based on block mode
 			if block.TargetMode == BlockTargetModeHeartRate {
@@ -348,10 +360,11 @@ func (wm *WorkoutManager) getCurrentBlock() *WorkoutBlock {
 		return nil
 	}
 
+	elapsed := wm.tracker.GetElapsedTime(nil)
 	var blockStartTime time.Duration
 	for i, block := range wm.workout.Blocks {
 		blockEndTime := blockStartTime + block.Duration
-		if wm.elapsedTime < blockEndTime {
+		if elapsed < blockEndTime {
 			return &wm.workout.Blocks[i]
 		}
 		blockStartTime = blockEndTime
@@ -409,11 +422,7 @@ func (wm *WorkoutManager) handleTick(currentHR float64) tickResult {
 		return tickResult{skip: true}
 	}
 
-	wm.elapsedTime += 1 * time.Second
-
-	totalDuration := wm.workout.TotalDuration()
-	if wm.elapsedTime >= totalDuration {
-		wm.elapsedTime = totalDuration
+	if wm.tracker.GetElapsedTime(nil) >= wm.workout.TotalDuration() {
 		wm.status = WorkoutStatusIdle
 		return tickResult{state: wm.buildState(), completed: true}
 	}
@@ -469,21 +478,29 @@ func (wm *WorkoutManager) runWorkoutLoop() {
 		case cmd := <-wm.cmdChan:
 			switch cmd {
 			case cmdStart:
+				var freshStart bool
 				state := func() WorkoutState {
 					wm.mu.Lock()
 					defer wm.mu.Unlock()
+					freshStart = wm.status == WorkoutStatusReady
 					wm.status = WorkoutStatusRunning
 					wm.hrPID.reset()
 					wm.lastBlockIdx = -1
 					return wm.buildState()
 				}()
 
+				if freshStart {
+					wm.tracker.Start(nil)
+				} else {
+					wm.tracker.Resume(nil)
+				}
 				ticker.Reset(1 * time.Second)
 				wm.model.SetWorkoutState(state)
 				wm.logger.Printf("WorkoutManager: Workout started")
 
 			case cmdPause:
 				ticker.Stop()
+				wm.tracker.Pause(nil)
 				state := func() WorkoutState {
 					wm.mu.Lock()
 					defer wm.mu.Unlock()
@@ -496,11 +513,12 @@ func (wm *WorkoutManager) runWorkoutLoop() {
 
 			case cmdStop:
 				ticker.Stop()
+				wm.tracker.Stop(nil)
 				state := func() WorkoutState {
 					wm.mu.Lock()
 					defer wm.mu.Unlock()
+					wm.tracker = NewWorkoutTracker()
 					wm.status = WorkoutStatusReady
-					wm.elapsedTime = 0
 					wm.hrPID.reset()
 					wm.lastBlockIdx = -1
 					return wm.buildState()
@@ -512,6 +530,8 @@ func (wm *WorkoutManager) runWorkoutLoop() {
 			}
 
 		case <-ticker.C:
+			now := time.Now()
+
 			// Get current heart rate from model (for HR mode blocks)
 			currentHR := wm.model.GetLatestData()[MetricHeartRate]
 
@@ -523,6 +543,7 @@ func (wm *WorkoutManager) runWorkoutLoop() {
 
 			if result.completed {
 				ticker.Stop()
+				wm.tracker.Stop(nil)
 				wm.model.SetWorkoutState(result.state)
 				wm.logger.Printf("WorkoutManager: Workout complete!")
 				continue
@@ -543,6 +564,8 @@ func (wm *WorkoutManager) runWorkoutLoop() {
 				wm.sendTargetPower(targetPower)
 				lastTargetPower = targetPower
 			}
+
+			wm.tracker.Submit(&now, WorkoutData{Power: float64(targetPower), HeartRate: currentHR})
 
 			wm.model.SetWorkoutState(result.state)
 		}

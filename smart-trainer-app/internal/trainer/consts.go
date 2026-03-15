@@ -746,14 +746,16 @@ const (
 
 // WorkoutState holds the current state of a workout execution
 type WorkoutState struct {
-	Status           WorkoutStatus // Current workout status
-	Workout          *Workout      // The loaded workout (nil if none)
-	CurrentBlockIdx  int           // Index of the current block (0-based)
-	ElapsedTime      time.Duration // Total elapsed time in workout
-	RemainingTime    time.Duration // Time remaining in workout
-	BlockElapsedTime time.Duration // Elapsed time in current block
+	Status             WorkoutStatus // Current workout status
+	Workout            *Workout      // The loaded workout (nil if none)
+	CurrentBlockIdx    int           // Index of the current block (0-based)
+	ElapsedTime        time.Duration // Total elapsed time in workout
+	RemainingTime      time.Duration // Time remaining in workout
+	BlockElapsedTime   time.Duration // Elapsed time in current block
 	BlockRemainingTime time.Duration // Time remaining in current block
-	CurrentTargetFTP float64       // Current target FTP multiplier (interpolated for ramps)
-	TargetPowerWatts int16         // Computed target power in watts (for UI display)
-	TargetHeartRate  int16         // Target heart rate in bpm (for HR mode blocks, 0 otherwise)
+	CurrentTargetFTP   float64       // Current target FTP multiplier (interpolated for ramps)
+	TargetPowerWatts   int16         // Computed target power in watts (for UI display)
+	TargetHeartRate    int16         // Target heart rate in bpm (for HR mode blocks, 0 otherwise)
+	AvgPowerWatts      float64       // Time-weighted average power since workout start
+	AvgHeartRate       float64       // Time-weighted average heart rate since workout start
 }

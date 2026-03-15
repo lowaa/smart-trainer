@@ -34,10 +34,10 @@ type MockBTDevice struct {
 	ftmsControlCallback    func([]byte)
 
 	// Current values for notifications
-	heartRate         uint8
-	power             int16
-	cadence           uint16
-	speed             uint16 // 0.01 km/h resolution
+	heartRate uint8
+	power     int16
+	cadence   uint16
+	speed     uint16 // 0.01 km/h resolution
 
 	// CSC cumulative values for realistic cadence simulation
 	cscCrankRevolutions uint16
@@ -46,42 +46,36 @@ type MockBTDevice struct {
 	cscCrankRemainder   float64
 
 	// Written values (for inspection via web UI)
-	writtenValues     []WrittenValue
-	writtenValuesMu   sync.RWMutex
-
-	// Web server management
-	server     *http.Server
-	serverPort int
-	doneChan   chan struct{}
-	wg         sync.WaitGroup
+	writtenValues   []WrittenValue
+	writtenValuesMu sync.RWMutex
 }
 
 // WrittenValue records a value written to a characteristic
 type WrittenValue struct {
-	Timestamp        time.Time `json:"timestamp"`
-	ServiceUUID      string    `json:"serviceUuid"`
-	CharacteristicUUID string  `json:"characteristicUuid"`
-	Data             []byte    `json:"data"`
-	DataHex          string    `json:"dataHex"`
-	Description      string    `json:"description"`
+	Timestamp          time.Time `json:"timestamp"`
+	DeviceName         string    `json:"deviceName"`
+	ServiceUUID        string    `json:"serviceUuid"`
+	CharacteristicUUID string    `json:"characteristicUuid"`
+	Data               []byte    `json:"data"`
+	DataHex            string    `json:"dataHex"`
+	Description        string    `json:"description"`
 }
 
 // MockDeviceState represents the current state for the web API
 type MockDeviceState struct {
-	HeartRate     uint8  `json:"heartRate"`
-	Power         int16  `json:"power"`
-	Cadence       uint16 `json:"cadence"`
-	SpeedKmh      float64 `json:"speedKmh"`
-	Connected     bool   `json:"connected"`
-	Address       string `json:"address"`
-	LocalName     string `json:"localName"`
+	HeartRate uint8   `json:"heartRate"`
+	Power     int16   `json:"power"`
+	Cadence   uint16  `json:"cadence"`
+	SpeedKmh  float64 `json:"speedKmh"`
+	Connected bool    `json:"connected"`
+	Address   string  `json:"address"`
+	LocalName string  `json:"localName"`
 }
 
 // MockBTDeviceConfig holds configuration for creating a mock device
 type MockBTDeviceConfig struct {
 	Address      string
 	LocalName    string
-	ServerPort   int
 	ServiceUUIDs []string
 }
 
@@ -91,7 +85,7 @@ func NewMockBTDevice(logger *log.Logger, config MockBTDeviceConfig) *MockBTDevic
 		panic("MockBTDevice: logger cannot be nil")
 	}
 
-	mock := &MockBTDevice{
+	return &MockBTDevice{
 		logger:        logger,
 		address:       config.Address,
 		localName:     config.LocalName,
@@ -102,43 +96,7 @@ func NewMockBTDevice(logger *log.Logger, config MockBTDeviceConfig) *MockBTDevic
 		cadence:       80,
 		speed:         2500, // 25.00 km/h
 		writtenValues: make([]WrittenValue, 0),
-		serverPort:    config.ServerPort,
-		doneChan:      make(chan struct{}),
 	}
-
-	return mock
-}
-
-// Start starts the mock device and its web server
-func (m *MockBTDevice) Start() error {
-	m.logger.Printf("MockBTDevice: Starting mock device %s (%s)", m.localName, m.address)
-
-	// Start web server
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", m.handleIndex)
-	mux.HandleFunc("/api/state", m.handleGetState)
-	mux.HandleFunc("/api/set", m.handleSetValues)
-	mux.HandleFunc("/api/writes", m.handleGetWrites)
-	mux.HandleFunc("/api/trigger-notification", m.handleTriggerNotification)
-
-	m.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", m.serverPort),
-		Handler: mux,
-	}
-
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-		m.logger.Printf("MockBTDevice: Web server starting on http://localhost:%d", m.serverPort)
-		if err := m.server.ListenAndServe(); err != http.ErrServerClosed {
-			m.logger.Printf("MockBTDevice: Web server error: %v", err)
-		}
-	}()
-
-	// Device starts disconnected - will be connected via MockBTManager.Connect()
-	m.state = bt.Disconnected
-
-	return nil
 }
 
 // SetConnected changes the connection state of the mock device
@@ -152,23 +110,6 @@ func (m *MockBTDevice) SetConnected(connected bool) {
 		m.state = bt.Disconnected
 		m.logger.Printf("MockBTDevice: State changed to Disconnected")
 	}
-}
-
-// Shutdown stops the mock device and cleans up resources
-func (m *MockBTDevice) Shutdown() {
-	m.logger.Printf("MockBTDevice: Shutting down")
-	close(m.doneChan)
-
-	if m.server != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := m.server.Shutdown(ctx); err != nil {
-			m.logger.Printf("MockBTDevice: Error shutting down web server: %v", err)
-		}
-	}
-
-	m.wg.Wait()
-	m.logger.Printf("MockBTDevice: Shutdown complete")
 }
 
 // --- bt.BTDevice Interface Implementation ---
@@ -344,6 +285,7 @@ func (m *MockBTDevice) writeCharacteristicInternal(serviceUuid string, character
 	m.writtenValuesMu.Lock()
 	m.writtenValues = append(m.writtenValues, WrittenValue{
 		Timestamp:          time.Now(),
+		DeviceName:         m.localName,
 		ServiceUUID:        serviceUuid,
 		CharacteristicUUID: characteristicUuid,
 		Data:               data,
@@ -534,128 +476,11 @@ func (m *MockBTDevice) TriggerAllNotifications() {
 	m.TriggerIndoorBikeDataNotification()
 }
 
-// --- Web Server Handlers ---
-
-func (m *MockBTDevice) handleIndex(w http.ResponseWriter, r *http.Request) {
-	html := `<!DOCTYPE html>
-<html>
-<head>
-    <title>Mock BT Device Control</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
-        h2 { margin-top: 0; }
-        label { display: inline-block; width: 120px; }
-        input[type="number"] { width: 100px; padding: 5px; }
-        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
-        .status { padding: 10px; background: #e0e0e0; border-radius: 5px; margin: 10px 0; }
-        #writes { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
-        .write-entry { padding: 5px; border-bottom: 1px solid #eee; }
-        .write-time { color: #666; }
-        .write-desc { color: #009; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <h1>Mock BT Device Control</h1>
-    
-    <div class="section">
-        <h2>Current State</h2>
-        <div id="state" class="status">Loading...</div>
-        <button onclick="refreshState()">Refresh</button>
-    </div>
-    
-    <div class="section">
-        <h2>Set Values</h2>
-        <div>
-            <label>Heart Rate:</label>
-            <input type="number" id="heartRate" min="40" max="220" value="70"> bpm
-        </div>
-        <div>
-            <label>Power:</label>
-            <input type="number" id="power" min="0" max="2000" value="100"> W
-        </div>
-        <div>
-            <label>Cadence:</label>
-            <input type="number" id="cadence" min="0" max="200" value="80"> rpm
-        </div>
-        <div>
-            <label>Speed:</label>
-            <input type="number" id="speed" min="0" max="80" step="0.1" value="25.0"> km/h
-        </div>
-        <button onclick="setValues()">Set Values</button>
-        <button onclick="triggerNotifications()">Send Notifications</button>
-    </div>
-    
-    <div class="section">
-        <h2>Written Values (from app)</h2>
-        <div id="writes">Loading...</div>
-        <button onclick="refreshWrites()">Refresh</button>
-    </div>
-    
-    <script>
-        function refreshState() {
-            fetch('/api/state')
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('state').innerHTML = 
-                        'Address: ' + data.address + '<br>' +
-                        'Name: ' + data.localName + '<br>' +
-                        'Connected: ' + data.connected + '<br>' +
-                        'Heart Rate: ' + data.heartRate + ' bpm<br>' +
-                        'Power: ' + data.power + ' W<br>' +
-                        'Cadence: ' + data.cadence + ' rpm<br>' +
-                        'Speed: ' + data.speedKmh.toFixed(2) + ' km/h';
-                    document.getElementById('heartRate').value = data.heartRate;
-                    document.getElementById('power').value = data.power;
-                    document.getElementById('cadence').value = data.cadence;
-                    document.getElementById('speed').value = data.speedKmh.toFixed(1);
-                });
-        }
-        
-        function setValues() {
-            const params = new URLSearchParams({
-                heartRate: document.getElementById('heartRate').value,
-                power: document.getElementById('power').value,
-                cadence: document.getElementById('cadence').value,
-                speedKmh: document.getElementById('speed').value
-            });
-            fetch('/api/set?' + params, {method: 'POST'})
-                .then(() => refreshState());
-        }
-        
-        function triggerNotifications() {
-            fetch('/api/trigger-notification', {method: 'POST'})
-                .then(() => refreshState());
-        }
-        
-        function refreshWrites() {
-            fetch('/api/writes')
-                .then(r => r.json())
-                .then(data => {
-                    const html = data.map(w => 
-                        '<div class="write-entry">' +
-                        '<span class="write-time">' + new Date(w.timestamp).toLocaleTimeString() + '</span> ' +
-                        '<span class="write-desc">' + w.description + '</span><br>' +
-                        'Data: ' + w.dataHex +
-                        '</div>'
-                    ).reverse().join('');
-                    document.getElementById('writes').innerHTML = html || 'No writes yet';
-                });
-        }
-        
-        refreshState();
-        refreshWrites();
-        setInterval(refreshWrites, 2000);
-    </script>
-</body>
-</html>`
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(html))
-}
-
-func (m *MockBTDevice) handleGetState(w http.ResponseWriter, r *http.Request) {
+// getState returns a snapshot of the device state
+func (m *MockBTDevice) getState() MockDeviceState {
 	m.mu.RLock()
-	state := MockDeviceState{
+	defer m.mu.RUnlock()
+	return MockDeviceState{
 		HeartRate: m.heartRate,
 		Power:     m.power,
 		Cadence:   m.cadence / 2, // Convert from 0.5 rpm to rpm
@@ -664,62 +489,24 @@ func (m *MockBTDevice) handleGetState(w http.ResponseWriter, r *http.Request) {
 		Address:   m.address,
 		LocalName: m.localName,
 	}
-	m.mu.RUnlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(state)
 }
 
-func (m *MockBTDevice) handleSetValues(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+// setValues updates the device's mock sensor values
+func (m *MockBTDevice) setValues(heartRate *uint8, power *int16, cadence *uint16, speedKmh *float64) {
 	m.mu.Lock()
-	if hr := r.URL.Query().Get("heartRate"); hr != "" {
-		var val int
-		fmt.Sscanf(hr, "%d", &val)
-		m.heartRate = uint8(val)
+	defer m.mu.Unlock()
+	if heartRate != nil {
+		m.heartRate = *heartRate
 	}
-	if p := r.URL.Query().Get("power"); p != "" {
-		var val int
-		fmt.Sscanf(p, "%d", &val)
-		m.power = int16(val)
+	if power != nil {
+		m.power = *power
 	}
-	if c := r.URL.Query().Get("cadence"); c != "" {
-		var val int
-		fmt.Sscanf(c, "%d", &val)
-		m.cadence = uint16(val * 2) // Store in 0.5 rpm resolution
+	if cadence != nil {
+		m.cadence = *cadence * 2 // Store in 0.5 rpm resolution
 	}
-	if s := r.URL.Query().Get("speedKmh"); s != "" {
-		var val float64
-		fmt.Sscanf(s, "%f", &val)
-		m.speed = uint16(val * 100) // Store in 0.01 km/h resolution
+	if speedKmh != nil {
+		m.speed = uint16(*speedKmh * 100) // Store in 0.01 km/h resolution
 	}
-	m.mu.Unlock()
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func (m *MockBTDevice) handleGetWrites(w http.ResponseWriter, r *http.Request) {
-	m.writtenValuesMu.RLock()
-	writes := make([]WrittenValue, len(m.writtenValues))
-	copy(writes, m.writtenValues)
-	m.writtenValuesMu.RUnlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(writes)
-}
-
-func (m *MockBTDevice) handleTriggerNotification(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	m.TriggerAllNotifications()
-	w.WriteHeader(http.StatusOK)
 }
 
 // --- MockBTManager ---
@@ -737,10 +524,16 @@ type MockBTManager struct {
 	notifyCancel          context.CancelFunc // Cancel for notification goroutine
 	wg                    sync.WaitGroup
 	mu                    sync.RWMutex
+
+	// Single shared web server for all mock devices
+	server   *http.Server
+	serverWg sync.WaitGroup
 }
 
 // Verify MockBTManager implements bt.BTManagerInterface
 var _ bt.BTManagerInterface = (*MockBTManager)(nil)
+
+const MockWebServerPort = 9900
 
 // NewMockBTManager creates a new mock Bluetooth manager with multiple devices
 func NewMockBTManager(logger *log.Logger) *MockBTManager {
@@ -754,18 +547,16 @@ func NewMockBTManager(logger *log.Logger) *MockBTManager {
 	mockDevices := []*MockBTDevice{
 		// Heart Rate Monitor - only HR service
 		NewMockBTDevice(logger, MockBTDeviceConfig{
-			Address:    "00:11:22:33:44:01",
-			LocalName:  "Mock HR Strap",
-			ServerPort: 9901,
+			Address:   "00:11:22:33:44:01",
+			LocalName: "Mock HR Strap",
 			ServiceUUIDs: []string{
 				ServiceUUIDHeartRate,
 			},
 		}),
 		// Smart Trainer - FTMS (indoor bike data + control) and Cycling Power
 		NewMockBTDevice(logger, MockBTDeviceConfig{
-			Address:    "00:11:22:33:44:02",
-			LocalName:  "Mock Smart Trainer",
-			ServerPort: 9902,
+			Address:   "00:11:22:33:44:02",
+			LocalName: "Mock Smart Trainer",
 			ServiceUUIDs: []string{
 				ServiceUUIDFTMS,
 				ServiceUUIDCyclingPower,
@@ -773,9 +564,8 @@ func NewMockBTManager(logger *log.Logger) *MockBTManager {
 		}),
 		// Cadence Sensor - only CSC service
 		NewMockBTDevice(logger, MockBTDeviceConfig{
-			Address:    "00:11:22:33:44:03",
-			LocalName:  "Mock Cadence Sensor",
-			ServerPort: 9903,
+			Address:   "00:11:22:33:44:03",
+			LocalName: "Mock Cadence Sensor",
 			ServiceUUIDs: []string{
 				ServiceUUIDCyclingSpeedCadence,
 			},
@@ -794,17 +584,30 @@ func NewMockBTManager(logger *log.Logger) *MockBTManager {
 	return mgr
 }
 
-// Enable initializes the mock BT manager (devices start disconnected)
+// Enable initializes the mock BT manager and starts the shared web server
 func (m *MockBTManager) Enable() error {
 	m.logger.Println("MockBTManager: Enabling (mock devices will appear when scanning)")
 
-	// Start the web server for each device but keep them disconnected
-	for _, device := range m.mockDevices {
-		if err := device.Start(); err != nil {
-			return err
-		}
-		m.logger.Printf("MockBTManager: %s web UI at http://localhost:%d", device.localName, device.serverPort)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", m.handleIndex)
+	mux.HandleFunc("/api/devices", m.handleGetDevices)
+	mux.HandleFunc("/api/set-all", m.handleSetAll)
+	mux.HandleFunc("/api/writes", m.handleGetWrites)
+	mux.HandleFunc("/api/trigger", m.handleTriggerNotification)
+
+	m.server = &http.Server{
+		Addr:    fmt.Sprintf(":%d", MockWebServerPort),
+		Handler: mux,
 	}
+
+	m.serverWg.Add(1)
+	go func() {
+		defer m.serverWg.Done()
+		m.logger.Printf("MockBTManager: Web UI at http://localhost:%d", MockWebServerPort)
+		if err := m.server.ListenAndServe(); err != http.ErrServerClosed {
+			m.logger.Printf("MockBTManager: Web server error: %v", err)
+		}
+	}()
 
 	// Emit empty connected devices list (nothing connected yet)
 	m.connectedDevicesEvent.Notify([]bt.BTDevice{})
@@ -1040,13 +843,259 @@ func (m *MockBTManager) Shutdown() {
 	m.stopNotifications()
 	m.cancel()
 	m.wg.Wait()
-	for _, dev := range m.mockDevices {
-		dev.Shutdown()
+
+	if m.server != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := m.server.Shutdown(ctx); err != nil {
+			m.logger.Printf("MockBTManager: Error shutting down web server: %v", err)
+		}
 	}
+	m.serverWg.Wait()
+
 	m.logger.Println("MockBTManager: Shutdown complete")
 }
 
 // GetMockDevices returns all mock devices for direct access
 func (m *MockBTManager) GetMockDevices() []*MockBTDevice {
 	return m.mockDevices
+}
+
+// findDevice looks up a mock device by address string
+func (m *MockBTManager) findDevice(address string) *MockBTDevice {
+	for _, dev := range m.mockDevices {
+		if dev.address == address {
+			return dev
+		}
+	}
+	return nil
+}
+
+// --- Web Server Handlers ---
+
+func (m *MockBTManager) handleIndex(w http.ResponseWriter, r *http.Request) {
+	html := `<!DOCTYPE html>
+<html>
+<head>
+    <title>Mock BT Device Control</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; }
+        .section { margin: 15px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        h2 { margin-top: 0; }
+        table { border-collapse: collapse; width: 100%; }
+        td { padding: 6px 8px; }
+        td:first-child { color: #555; width: 130px; }
+        input[type="number"] { width: 90px; padding: 4px; }
+        button { padding: 8px 16px; margin: 8px 4px 0 0; cursor: pointer; }
+        .dot { font-size: 18px; }
+        .dot.on { color: green; }
+        .dot.off { color: #aaa; }
+        .writes { max-height: 280px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .write-entry { padding: 4px 0; border-bottom: 1px solid #eee; }
+        .write-time { color: #888; }
+        .write-desc { color: #009; font-weight: bold; }
+        .write-device { color: #666; font-style: italic; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <h1>Mock BT Device Control</h1>
+
+    <div class="section">
+        <h2>Devices</h2>
+        <table id="device-status"></table>
+    </div>
+
+    <div class="section">
+        <h2>Set Values</h2>
+        <table>
+            <tr><td>Heart Rate</td><td><input type="number" id="heartRate" min="40" max="220" value="70"> bpm</td></tr>
+            <tr><td>Power</td><td><input type="number" id="power" min="0" max="2000" value="100"> W</td></tr>
+            <tr><td>Speed</td><td><input type="number" id="speedKmh" min="0" max="80" step="0.1" value="25.0"> km/h</td></tr>
+            <tr><td>Cadence</td><td><input type="number" id="cadence" min="0" max="200" value="80"> rpm</td></tr>
+        </table>
+        <button onclick="setAll()">Set Values</button>
+        <button onclick="trigger()">Send Notifications</button>
+    </div>
+
+    <div class="section">
+        <h2>Written Values (from app)</h2>
+        <div id="writes" class="writes">Loading...</div>
+    </div>
+
+    <script>
+        function refreshState() {
+            fetch('/api/devices').then(r => r.json()).then(devices => {
+                const rows = devices.map(d =>
+                    '<tr>' +
+                    '<td><span class="dot ' + (d.connected ? 'on' : 'off') + '">●</span></td>' +
+                    '<td>' + d.localName + '</td>' +
+                    '<td style="color:#555;font-size:12px">' + d.address + '</td>' +
+                    '<td style="color:#555;font-size:12px">' + (d.connected ? 'connected' : 'disconnected') + '</td>' +
+                    '</tr>'
+                ).join('');
+                document.getElementById('device-status').innerHTML = rows;
+            });
+        }
+
+        function setAll() {
+            const params = new URLSearchParams({
+                heartRate: document.getElementById('heartRate').value,
+                power:     document.getElementById('power').value,
+                speedKmh:  document.getElementById('speedKmh').value,
+                cadence:   document.getElementById('cadence').value,
+            });
+            fetch('/api/set-all?' + params, {method: 'POST'}).then(refreshState);
+        }
+
+        function trigger() {
+            fetch('/api/trigger', {method: 'POST'});
+        }
+
+        function refreshWrites() {
+            fetch('/api/writes').then(r => r.json()).then(data => {
+                document.getElementById('writes').innerHTML =
+                    [...data].reverse().map(w =>
+                        '<div class="write-entry">' +
+                        '<span class="write-time">' + new Date(w.timestamp).toLocaleTimeString() + '</span> ' +
+                        '<span class="write-desc">' + w.description + '</span> ' +
+                        '<span class="write-device">(' + w.deviceName + ')</span> ' +
+                        w.dataHex + '</div>'
+                    ).join('') || 'No writes yet';
+            });
+        }
+
+        refreshState();
+        refreshWrites();
+        setInterval(refreshState, 2000);
+        setInterval(refreshWrites, 2000);
+    </script>
+</body>
+</html>`
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(html))
+}
+
+// handleGetDevices returns all device states as JSON
+func (m *MockBTManager) handleGetDevices(w http.ResponseWriter, r *http.Request) {
+	states := make([]MockDeviceState, len(m.mockDevices))
+	for i, dev := range m.mockDevices {
+		states[i] = dev.getState()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(states)
+}
+
+// handleSetAll routes each field to the appropriate device based on its service UUIDs.
+// heartRate → HR device, power+speedKmh → FTMS device, cadence → CSC device.
+func (m *MockBTManager) handleSetAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := r.URL.Query()
+
+	var heartRate *uint8
+	var power *int16
+	var cadence *uint16
+	var speedKmh *float64
+
+	if v := q.Get("heartRate"); v != "" {
+		var val int
+		fmt.Sscanf(v, "%d", &val)
+		u := uint8(val)
+		heartRate = &u
+	}
+	if v := q.Get("power"); v != "" {
+		var val int
+		fmt.Sscanf(v, "%d", &val)
+		p := int16(val)
+		power = &p
+	}
+	if v := q.Get("cadence"); v != "" {
+		var val int
+		fmt.Sscanf(v, "%d", &val)
+		c := uint16(val)
+		cadence = &c
+	}
+	if v := q.Get("speedKmh"); v != "" {
+		var val float64
+		fmt.Sscanf(v, "%f", &val)
+		speedKmh = &val
+	}
+
+	for _, dev := range m.mockDevices {
+		switch {
+		case dev.HasServiceUUID(ServiceUUIDHeartRate):
+			dev.setValues(heartRate, nil, nil, nil)
+		case dev.HasServiceUUID(ServiceUUIDFTMS):
+			dev.setValues(nil, power, nil, speedKmh)
+		case dev.HasServiceUUID(ServiceUUIDCyclingSpeedCadence):
+			dev.setValues(nil, nil, cadence, nil)
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleGetWrites returns written characteristic values.
+// With no address query param, returns all devices' writes merged and sorted by time.
+func (m *MockBTManager) handleGetWrites(w http.ResponseWriter, r *http.Request) {
+	address := r.URL.Query().Get("address")
+
+	var writes []WrittenValue
+	if address == "" {
+		for _, dev := range m.mockDevices {
+			dev.writtenValuesMu.RLock()
+			writes = append(writes, dev.writtenValues...)
+			dev.writtenValuesMu.RUnlock()
+		}
+		// Sort by timestamp ascending
+		for i := 1; i < len(writes); i++ {
+			for j := i; j > 0 && writes[j].Timestamp.Before(writes[j-1].Timestamp); j-- {
+				writes[j], writes[j-1] = writes[j-1], writes[j]
+			}
+		}
+		// Keep last 100 across all devices
+		if len(writes) > 100 {
+			writes = writes[len(writes)-100:]
+		}
+	} else {
+		dev := m.findDevice(address)
+		if dev == nil {
+			http.Error(w, "Device not found", http.StatusNotFound)
+			return
+		}
+		dev.writtenValuesMu.RLock()
+		writes = make([]WrittenValue, len(dev.writtenValues))
+		copy(writes, dev.writtenValues)
+		dev.writtenValuesMu.RUnlock()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(writes)
+}
+
+// handleTriggerNotification triggers notifications on a specific device, or all devices if no address
+func (m *MockBTManager) handleTriggerNotification(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	address := r.URL.Query().Get("address")
+	if address == "" {
+		for _, dev := range m.mockDevices {
+			dev.TriggerAllNotifications()
+		}
+	} else {
+		dev := m.findDevice(address)
+		if dev == nil {
+			http.Error(w, "Device not found", http.StatusNotFound)
+			return
+		}
+		dev.TriggerAllNotifications()
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

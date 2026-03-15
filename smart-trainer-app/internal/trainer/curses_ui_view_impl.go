@@ -737,6 +737,15 @@ func (ui *CursesUIViewImpl) formatActiveWorkoutDisplay(state WorkoutState, pause
 		}
 	}
 
+	// Workout averages
+	text += "\n"
+	if state.AvgPowerWatts > 0 {
+		text += fmt.Sprintf("  [blue]⚡[white] Avg Power:    [yellow]%.0f[white] W\n", state.AvgPowerWatts)
+	}
+	if state.AvgHeartRate > 0 {
+		text += fmt.Sprintf("  [red]♥[white] Avg HR:       [yellow]%.0f[white] bpm\n", state.AvgHeartRate)
+	}
+
 	// Controls hint
 	text += "\n  [gray]─────────────────────────[white]\n"
 	if paused {

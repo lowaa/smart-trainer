@@ -122,6 +122,7 @@ func runNormalMode(logger *log.Logger, uiLogChan <-chan string) {
 	workoutManager := trainer.NewWorkoutManager(model, deviceHandler, logger)
 
 	controller := trainer.NewUIController(model, deviceHandler, workoutManager, logger)
+	autoInit := trainer.NewAutoInitService(model, deviceHandler, logger)
 	app := tview.NewApplication()
 	uiImpl := trainer.NewCursesUIView(logger, app, model)
 
@@ -140,6 +141,7 @@ func runNormalMode(logger *log.Logger, uiLogChan <-chan string) {
 		panic(err)
 	}
 
+	autoInit.Shutdown()
 	controller.Shutdown()
 	manager.Shutdown()
 	workoutManager.Shutdown()
@@ -154,7 +156,7 @@ func runTestMode(logger *log.Logger, uiLogChan <-chan string) {
 
 	logger.Println("===========================================")
 	logger.Println("TEST MODE: Mock device web UI available at:")
-	logger.Println("  http://localhost:9999")
+	logger.Printf("  http://localhost:%d", trainer.MockWebServerPort)
 	logger.Println("===========================================")
 
 	// Pass the UI log channel to UIModel for displaying logs in the UI
@@ -167,6 +169,7 @@ func runTestMode(logger *log.Logger, uiLogChan <-chan string) {
 	workoutManager := trainer.NewWorkoutManager(model, deviceHandler, logger)
 
 	controller := trainer.NewUIController(model, deviceHandler, workoutManager, logger)
+	autoInit := trainer.NewAutoInitService(model, deviceHandler, logger)
 	app := tview.NewApplication()
 	uiImpl := trainer.NewCursesUIView(logger, app, model)
 
@@ -185,6 +188,7 @@ func runTestMode(logger *log.Logger, uiLogChan <-chan string) {
 		panic(err)
 	}
 
+	autoInit.Shutdown()
 	controller.Shutdown()
 	mockManager.Shutdown()
 	workoutManager.Shutdown()

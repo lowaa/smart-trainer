@@ -4,8 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
-
-	"github.com/lowaak/smart-trainer/smart-trainer-app/internal/go_func_utils"
+	"time"
 )
 
 // UIController handles UI events and coordinates with the UIModel
@@ -44,31 +43,7 @@ func NewUIController(model *UIModel, deviceHandler *DeviceHandler, workoutManage
 		cancel:         cancel,
 	}
 
-	c.wg.Add(1)
-	go_func_utils.SafeGo(logger, func() { c.listenToAutoConnect() })
-
 	return c
-}
-
-func (c *UIController) listenToAutoConnect() {
-	defer c.wg.Done()
-
-	ch := make(chan AutoConnectRequest, 1)
-	unregister := c.model.ListenToAutoConnect(ch)
-	defer unregister()
-
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case req, ok := <-ch:
-			if !ok {
-				return
-			}
-			c.logger.Printf("Auto-connecting %s (%s) from persistence", req.Device.Address, req.DeviceTypeID)
-			c.ScanDeviceSelected(req.DeviceTypeID, req.Device)
-		}
-	}
 }
 
 // ScanDeviceSelected handles when a scan device is selected from the UI
@@ -81,6 +56,9 @@ func (c *UIController) ScanDeviceSelected(deviceTypeID DeviceTypeID, uiDeviceMod
 	}
 	// Set the connected device for this device type in the model
 	c.model.SetConnectedDeviceForDeviceType(deviceTypeID, uiDeviceModel)
+	// Doesn't seem to connect cleanly if these events fire off too quickly.
+	// rate limit it a little...
+	time.Sleep(1 * time.Second)
 }
 
 // DisconnectDeviceForDeviceType unsubscribes a device from a specific device type.

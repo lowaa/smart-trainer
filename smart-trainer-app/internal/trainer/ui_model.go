@@ -29,20 +29,12 @@ type btDevicesByDeviceType map[DeviceTypeID][]bt.BTDevice
 // MetricData holds the most recent value for each metric
 type MetricData map[MetricID]float64
 
-// AutoConnectRequest is fired when a persisted preferred device is found in a scan
-// and no device is currently connected for that device type.
-type AutoConnectRequest struct {
-	DeviceTypeID DeviceTypeID
-	Device       *UIDeviceModel
-}
-
 type UIModel struct {
 	logEvent                         *events.ChannelEvent[string]
 	scanDevicesEvent                 *events.ChannelEvent[UIDeviceModelByDeviceType]
 	scanDevicesByDeviceType          btDevicesByDeviceType
 	connectedDeviceByDeviceTypeEvent *events.ChannelEvent[UIDeviceModelByDeviceType]
 	connectedDeviceByDeviceType      map[DeviceTypeID]*UIDeviceModel // User-assigned device per device type
-	autoConnectEvent                 *events.ChannelEvent[AutoConnectRequest]
 	closeApplicationEvent            *events.ChannelEvent[struct{}]
 	uiStateEvent                     *events.ChannelEvent[UIState]
 	uiState                          UIState
@@ -76,7 +68,6 @@ func NewUIModel(manager bt.BTManagerInterface, logger *log.Logger, uiLogChan <-c
 		logEvent:                         events.NewChannelEvent[string](false),
 		scanDevicesEvent:                 events.NewChannelEvent[UIDeviceModelByDeviceType](true),
 		connectedDeviceByDeviceTypeEvent: events.NewChannelEvent[UIDeviceModelByDeviceType](true),
-		autoConnectEvent:                 events.NewChannelEvent[AutoConnectRequest](false),
 		closeApplicationEvent:            events.NewChannelEvent[struct{}](true),
 		uiStateEvent:                     events.NewChannelEvent[UIState](true),
 		uiState:                          UIState{Mode: UIModeDeviceManagement},
@@ -135,12 +126,6 @@ func (m *UIModel) ListenToScanDevices(ch chan<- UIDeviceModelByDeviceType) func(
 // Returns a deregistration function that can be called to remove the listener
 func (m *UIModel) ListenToConnectedDeviceByDeviceType(ch chan<- UIDeviceModelByDeviceType) func() {
 	return m.connectedDeviceByDeviceTypeEvent.Listen(ch)
-}
-
-// ListenToAutoConnect registers a channel to receive auto-connect requests
-// Returns a deregistration function that can be called to remove the listener
-func (m *UIModel) ListenToAutoConnect(ch chan<- AutoConnectRequest) func() {
-	return m.autoConnectEvent.Listen(ch)
 }
 
 // ListenToCloseApplication registers a channel to receive close application signals
@@ -350,6 +335,11 @@ func (m *UIModel) SetConnectedDeviceForDeviceType(deviceTypeID DeviceTypeID, dev
 	m.connectedDeviceByDeviceTypeEvent.Notify(result)
 }
 
+// GetPreferredDevice returns the persisted preferred device address for a device type
+func (m *UIModel) GetPreferredDevice(deviceTypeID DeviceTypeID) string {
+	return m.persistence.getPreferredDevice(deviceTypeID)
+}
+
 // ClearConnectedDeviceForDeviceType clears the connected device for a specific device type and notifies listeners
 func (m *UIModel) ClearConnectedDeviceForDeviceType(deviceTypeID DeviceTypeID) {
 	m.mu.Lock()
@@ -432,9 +422,6 @@ func (m *UIModel) listenToScanDevices(ctx context.Context, manager bt.BTManagerI
 	unregister := manager.ListenToDeviceList(deviceChan)
 	defer unregister()
 
-	// tracks which device types we've already requested auto-connect for this session
-	autoConnectRequested := make(map[DeviceTypeID]bool)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -467,32 +454,9 @@ func (m *UIModel) listenToScanDevices(ctx context.Context, manager bt.BTManagerI
 			m.mu.Lock()
 			m.scanDevicesByDeviceType = devicesByDeviceType
 			result := convertDevicesByDeviceTypeToUIDeviceModelByDeviceType(m.scanDevicesByDeviceType)
-
-			// Check for persisted devices to auto-connect
-			var autoConnects []AutoConnectRequest
-			for deviceTypeID, uiDevices := range result {
-				if m.connectedDeviceByDeviceType[deviceTypeID] != nil || autoConnectRequested[deviceTypeID] {
-					continue
-				}
-				preferredAddr := m.persistence.getPreferredDevice(deviceTypeID)
-				if preferredAddr == "" {
-					continue
-				}
-				for _, uiDevice := range uiDevices {
-					if uiDevice.Address == preferredAddr {
-						autoConnects = append(autoConnects, AutoConnectRequest{DeviceTypeID: deviceTypeID, Device: uiDevice})
-						autoConnectRequested[deviceTypeID] = true
-						break
-					}
-				}
-			}
 			m.mu.Unlock()
 
 			m.scanDevicesEvent.Notify(result)
-
-			for _, req := range autoConnects {
-				m.autoConnectEvent.Notify(req)
-			}
 		}
 	}
 }
