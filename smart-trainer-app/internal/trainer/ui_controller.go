@@ -58,7 +58,7 @@ func (c *UIController) ScanDeviceSelected(deviceTypeID DeviceTypeID, uiDeviceMod
 	c.model.SetConnectedDeviceForDeviceType(deviceTypeID, uiDeviceModel)
 	// Doesn't seem to connect cleanly if these events fire off too quickly.
 	// rate limit it a little...
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 }
 
 // DisconnectDeviceForDeviceType unsubscribes a device from a specific device type.

@@ -24,7 +24,7 @@ const (
 	hrPidOutputMin   = 50
 	hrPidIntegralMax = 150
 	// my poor legs
-	hrPidMaxFTPMult  = 0.8
+	hrPidMaxFTPMult  = 1.0
 )
 
 // hrPIDState holds the state for the heart rate PID controller
