@@ -551,6 +551,7 @@ func (w *Workout) TotalDuration() time.Duration {
 
 const HEART_RATE_ZONE_2_MAX_HR_RATIO = 0.67
 const HEART_RATE_ZONE_3_MAX_HR_RATIO = 0.75
+const HEART_RATE_ZONE_3_5_MAX_HR_RATIO = 0.80
 
 // AllWorkouts defines the available workouts
 var AllWorkouts = []Workout{
@@ -725,6 +726,19 @@ var AllWorkouts = []Workout{
 			{
 				TargetMode:      BlockTargetModeHeartRate,
 				TargetMaxHRMult: HEART_RATE_ZONE_3_MAX_HR_RATIO,
+				StartFTPMult:    NotSet,
+				EndFTPMult:      NotSet,
+				TargetCadence:   90,
+				Duration:        60 * time.Minute,
+			},
+		},
+	},
+	{
+		Name: "HR Zone 3.5 - 60 Min",
+		Blocks: []WorkoutBlock{
+			{
+				TargetMode:      BlockTargetModeHeartRate,
+				TargetMaxHRMult: HEART_RATE_ZONE_3_5_MAX_HR_RATIO,
 				StartFTPMult:    NotSet,
 				EndFTPMult:      NotSet,
 				TargetCadence:   90,
